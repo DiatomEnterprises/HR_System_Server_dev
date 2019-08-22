@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using DocumentFormat.OpenXml.Packaging;
+using Independentsoft.Office.Odf;
 
 namespace HR_Server.Controllers
 {
@@ -55,7 +57,7 @@ namespace HR_Server.Controllers
         }
 
         [HttpPost("")]
-        public async Task<ActionResult> AddPersonAsync([FromForm] Person person)
+        public async Task<ActionResult> AddPersonAsync([FromBody] Person person)
         {
             ActionResult result;
 
@@ -156,29 +158,61 @@ namespace HR_Server.Controllers
                 "js",
                 "mvc",
                 "node.js",
+                "python",
                 "react",
                 "ts",
                 "typescript",
                 "vb",
                 "vue",
-                "web api"
+                "web api",
+                "xamarin"
             };
 
             Dictionary<string, bool> techData = new Dictionary<string, bool>(techs.Select(t => new KeyValuePair<string, bool>(t, false)));
 
+            var fileExtension = cv.FileName.Split(".").Last();
+
             if (cv.Length > 0)
             {
-                using (MemoryStream ms = new MemoryStream())
+                switch(fileExtension)
                 {
-                    await cv.CopyToAsync(ms);
-                    byte[] data = new byte[ms.Length];
-                    await ms.ReadAsync(data, 0, (int)ms.Length);
+                    case "docx":
+                        using (var readStream = cv.OpenReadStream())
+                        {
+                            using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(readStream as Stream, false))
+                            {
+                                string docText = null;
+                                using (StreamReader sr = new StreamReader(wordDoc.MainDocumentPart.GetStream()))
+                                {
+                                    docText = sr.ReadToEnd();
+                                }
 
-                    //TextExtractor te = new TextExtractor();
-                    //var teResult = te.Extract(data);
+                                techs.ForEach(t => techData[t] = docText.Contains(t));
 
-                    //techs.ForEach(t => techData[t] = teResult.Text.Contains(t));
+                            }
+                        }
+
+                        break;
+
+                    case "pdf":
+                        break;
+
+                    case "odt":
+                        using (var readStream = cv.OpenReadStream())
+                        {
+                            TextDocument doc = new TextDocument(readStream);
+
+                            string docText = doc.ToText();
+
+                            techs.ForEach(t => techData[t] = docText.Contains(t));
+                        }
+
+                        break;  
                 }
+
+
+
+                
             }
 
             return techData;

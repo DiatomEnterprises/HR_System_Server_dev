@@ -173,57 +173,40 @@ namespace HR_Server.Controllers
 
             Dictionary<string, bool> techData = new Dictionary<string, bool>(techs.Select(t => new KeyValuePair<string, bool>(t, false)));
 
-            string docText = null;
             string fileExtension = cv.FileName.Split(".").Last();
 
             if (cv.Length > 0)
             {
-                switch (fileExtension)
-                {
-                    case "docx":
-                        using (var readStream = cv.OpenReadStream())
-                        {
-                            using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(readStream as Stream, false))
-                            {
-                                using (StreamReader sr = new StreamReader(wordDoc.MainDocumentPart.GetStream()))
-                                {
-                                    docText = sr.ReadToEnd();
-                                }
+                IParser parser = GetParser(fileExtension);
 
-                                techs.ForEach(t => techData[t] = docText.Contains(t));
-                            }
-                        }
+                string docText = parser.GetText(cv);
 
-                        break;
-
-                    case "pdf":
-                        StringBuilder text = new StringBuilder();
-                        using (PdfReader reader = new PdfReader(cv.OpenReadStream()))
-                        {
-                            for (int i = 1; i <= reader.NumberOfPages; i++)
-                            {
-                                text.Append(PdfTextExtractor.GetTextFromPage(reader, i));
-                            }
-                        }
-
-                        docText = text.ToString();
-                        techs.ForEach(t => techData[t] = docText.ToString().Contains(t));
-
-                        break;
-
-                    case "odt":
-                        using (var readStream = cv.OpenReadStream())
-                        {
-                            docText = new TextDocument(readStream).ToText();
-
-                            techs.ForEach(t => techData[t] = docText.Contains(t));
-                        }
-
-                        break;
-                }
+                techs.ForEach(t => techData[t] = docText.Contains(t));
             }
 
             return await Task.FromResult(techData);
+        }
+
+        private IParser GetParser(string fileExtension)
+        {
+            IParser parser = null;
+
+            switch(fileExtension)
+            {
+                case "docx":
+                    parser = new DocxParser();
+                    break;
+
+                case "odt":
+                    parser = new OdtParser();
+                    break;
+
+                case "pdf":
+                    parser = new PdfParser();
+                    break;
+            }
+
+            return parser;
         }
     }
 }

@@ -2,17 +2,20 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml.Packaging;
 using HR_Server.Contexts;
 using HR_Server.Model;
+using Independentsoft.Office.Odf;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
-using DocumentFormat.OpenXml.Packaging;
-using Independentsoft.Office.Odf;
 
 namespace HR_Server.Controllers
 {
@@ -132,7 +135,7 @@ namespace HR_Server.Controllers
 
             try
             {
-                result = Ok(new {Techs = await ProcessCvData_Async(cv.CV) });
+                result = Ok(new { Techs = await ProcessCvData_Async(cv.CV) });
             }
             catch (Exception e)
             {
@@ -170,52 +173,57 @@ namespace HR_Server.Controllers
 
             Dictionary<string, bool> techData = new Dictionary<string, bool>(techs.Select(t => new KeyValuePair<string, bool>(t, false)));
 
-            var fileExtension = cv.FileName.Split(".").Last();
+            string docText = null;
+            string fileExtension = cv.FileName.Split(".").Last();
 
             if (cv.Length > 0)
             {
-                switch(fileExtension)
+                switch (fileExtension)
                 {
                     case "docx":
                         using (var readStream = cv.OpenReadStream())
                         {
                             using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(readStream as Stream, false))
                             {
-                                string docText = null;
                                 using (StreamReader sr = new StreamReader(wordDoc.MainDocumentPart.GetStream()))
                                 {
                                     docText = sr.ReadToEnd();
                                 }
 
                                 techs.ForEach(t => techData[t] = docText.Contains(t));
-
                             }
                         }
 
                         break;
 
                     case "pdf":
+                        StringBuilder text = new StringBuilder();
+                        using (PdfReader reader = new PdfReader(cv.OpenReadStream()))
+                        {
+                            for (int i = 1; i <= reader.NumberOfPages; i++)
+                            {
+                                text.Append(PdfTextExtractor.GetTextFromPage(reader, i));
+                            }
+                        }
+
+                        docText = text.ToString();
+                        techs.ForEach(t => techData[t] = docText.ToString().Contains(t));
+
                         break;
 
                     case "odt":
                         using (var readStream = cv.OpenReadStream())
                         {
-                            TextDocument doc = new TextDocument(readStream);
-
-                            string docText = doc.ToText();
+                            docText = new TextDocument(readStream).ToText();
 
                             techs.ForEach(t => techData[t] = docText.Contains(t));
                         }
 
-                        break;  
+                        break;
                 }
-
-
-
-                
             }
 
-            return techData;
+            return await Task.FromResult(techData);
         }
     }
 }

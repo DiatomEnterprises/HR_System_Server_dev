@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using static HR_Server.Model.FileExtensionsModel;
 
 namespace HR_Server.Controllers
 {
@@ -147,6 +148,8 @@ namespace HR_Server.Controllers
 
         private async Task<Dictionary<string, bool>> ProcessCvData_Async(IFormFile cv)
         {
+            FileExtension fileType = FileExtension.None;
+
             List<string> techs = new List<string>
             {
                 ".net",
@@ -175,9 +178,24 @@ namespace HR_Server.Controllers
 
             string fileExtension = cv.FileName.Split(".").Last();
 
+            switch(fileExtension)
+            {
+                case "docx":
+                    fileType = FileExtension.Docx;
+                    break;
+
+                case "odt":
+                    fileType = FileExtension.Odt;
+                    break;
+
+                case "pdf":
+                    fileType = FileExtension.Pdf;
+                    break;
+            }
+
             if (cv.Length > 0)
             {
-                IParser parser = GetParser(fileExtension);
+                IParser parser = GetParser(fileType);
 
                 string docText = parser.GetText(cv);
 
@@ -187,23 +205,26 @@ namespace HR_Server.Controllers
             return await Task.FromResult(techData);
         }
 
-        private IParser GetParser(string fileExtension)
+        private IParser GetParser(FileExtension fileType)
         {
             IParser parser = null;
 
-            switch(fileExtension)
+            switch(fileType)
             {
-                case "docx":
+                case FileExtension.Docx:
                     parser = new DocxParser();
                     break;
 
-                case "odt":
+                case FileExtension.Odt:
                     parser = new OdtParser();
                     break;
 
-                case "pdf":
+                case FileExtension.Pdf:
                     parser = new PdfParser();
                     break;
+
+                default:
+                    throw new Exception("Unknown file type");
             }
 
             return parser;
